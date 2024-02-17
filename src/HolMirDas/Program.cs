@@ -1,4 +1,6 @@
-﻿// See https://aka.ms/new-console-template for more information
+﻿using System.ServiceModel.Syndication;
+using System.Xml;
+
 Console.WriteLine("Starting HolMirDas");
 
 // configs needed:
@@ -14,6 +16,24 @@ Console.WriteLine("Starting HolMirDas");
 // In there -> Items
 // Source -> of SyndicationItem member collection links first item? (type should I think be alternate, maybe query that)
 
+IEnumerable<string> rssUrls =
+[
+];
+
+foreach (var rssUrl in rssUrls)
+{
+	using var rssXmlReader = XmlReader.Create(rssUrl);
+	var feed = SyndicationFeed.Load(rssXmlReader);
+	int index = 0;
+	foreach (var item in feed.Items)
+	{
+		++index;
+		Console.WriteLine($"{index}: {item.PublishDate}");
+		Console.WriteLine(item.Links.FirstOrDefault()?.Uri.ToString() ?? "no link found?");
+		Console.WriteLine(item.Title);
+		Console.WriteLine(item.Summary);
+	}
+}
 
 // bonus - can we pre-screen the incoming links against something like a local ringbuffer to prevent repeatedly ap/get-ing the same posts?
 
