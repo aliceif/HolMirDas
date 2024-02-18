@@ -52,6 +52,7 @@ foreach (var rssUrl in rssUrls)
 }
 
 // bonus - can we pre-screen the incoming links against something like a local ringbuffer to prevent repeatedly ap/get-ing the same posts?
+// can redis easily do this? -> add until we use "too much space?"
 
 // we should also use a time filter since posts from a week+ ago are irrelevant
 
@@ -62,6 +63,7 @@ foreach (var rssUrl in rssUrls)
 // for testing probably do separate user.
 
 // this needs to avoid getting slapped by the rate limit, even apart from prefiltering
+// simple delay time in the cyclical working through the set?
 
 foreach (var postUrl in postUrls)
 {
