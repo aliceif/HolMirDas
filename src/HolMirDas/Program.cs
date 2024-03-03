@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.ServiceModel.Syndication;
 using System.Xml;
 
@@ -65,19 +65,42 @@ foreach (var rssUrl in rssUrls)
 // this needs to avoid getting slapped by the rate limit, even apart from prefiltering
 // simple delay time in the cyclical working through the set?
 
+Console.WriteLine($"Total queue size: {postUrls.Count}");
+
+int successCount = 0;
 foreach (var postUrl in postUrls)
 {
-	var result = await targetInstanceUrl
-	.AppendPathSegment("api")
-	.AppendPathSegments("ap", "show")
-	.PostJsonAsync(new
+	try
 	{
-		i = targetToken,
-		uri = postUrl.ToString(),
-	})
-	.ReceiveString();
-	var jsonResult = System.Text.Json.JsonDocument.Parse(result);
-	Console.WriteLine($"Result of {postUrl}:{Environment.NewLine}{jsonResult}");
+		var result = await targetInstanceUrl
+			.AppendPathSegment("api")
+			.AppendPathSegments("ap", "show")
+			.PostJsonAsync(new
+			{
+				i = targetToken,
+				uri = postUrl.ToString(),
+			})
+			.ReceiveString();
+		var jsonResult = System.Text.Json.JsonDocument.Parse(result);
+		Console.WriteLine($"Result of {postUrl}:{Environment.NewLine}{jsonResult}");
+
+		await Task.Delay(TimeSpan.FromSeconds(5));
+		++successCount;
+	}
+	catch (FlurlHttpException ex)
+	{
+		if (ex.StatusCode == 429)
+		{
+			Console.WriteLine($"Ran into rate limit at element {successCount} / {postUrls.Count}");
+			Console.WriteLine(ex.ToString());
+			break;
+		}
+		else
+		{
+			Console.WriteLine(ex.ToString());
+			continue;
+		}
+	}
 }
 
 Console.WriteLine("HolMirDas finished");
