@@ -5,6 +5,10 @@ using System.Xml;
 using Flurl;
 using Flurl.Http;
 
+const string ApplicationName = "HolMirDas";
+Guid applicationGuid = Guid.Parse("f61215eb-1c9e-4114-a32c-84a300ef890c");
+string tempFolder = $"{ApplicationName}_{applicationGuid:D}";
+
 Console.WriteLine("Starting HolMirDas");
 
 // configs needed:
