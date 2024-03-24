@@ -17,18 +17,17 @@ const int maxTries = 48;
 
 Console.WriteLine("Starting HolMirDas");
 
+// todo config
+
 // configs needed:
 // list of urls (with source type)
 // target instance
 // access token
 // size of buffer (some servers have no storage)
-// location of buffer -> this should be a somewhat persistent temp file -> look up if this concept exists 
+// retry counter
 
-// to load RSS
-// SyndicationFeed#Load takes XML Reader
-// We get XML Reader probably from HTTPClient-ing the RSS URL?
-// In there -> Items
-// Source -> of SyndicationItem member collection links first item? (type should I think be alternate, maybe query that)
+// todo proper logging
+// we probably want to send this to the journal on gnu/systemd/linux
 
 var targetToken = "";
 var targetInstanceUrl = "";
@@ -62,20 +61,6 @@ foreach (var rssUrl in rssUrls)
 
 Console.WriteLine($"Incoming RSS Url count: {receivedUrls.Count}");
 var receivedLogEntries = receivedUrls.Select(u => new ProcessingLogEntry(u, UrlState.Todo, 0, DateTimeOffset.Now));
-
-// bonus - can we pre-screen the incoming links against something like a local ringbuffer to prevent repeatedly ap/get-ing the same posts?
-// can redis easily do this? -> add until we use "too much space?"
-
-// we should also use a time filter since posts from a week+ ago are irrelevant
-
-// to post to misskey
-// simple post request to /ap/get with auth intact -> check how auth works, probably something with the app key token thing?^
-// seems like auth is just an added property in request json named "i" and takes the access token
-// requested remote post url is property "uri"
-// for testing probably do separate user.
-
-// this needs to avoid getting slapped by the rate limit, even apart from prefiltering
-// simple delay time in the cyclical working through the set?
 
 ICollection<ProcessingLogEntry> processingLog;
 // read processing log
