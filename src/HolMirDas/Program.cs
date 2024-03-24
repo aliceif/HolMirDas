@@ -47,7 +47,6 @@ foreach (var rssUrl in rssUrls)
 	foreach (var item in feed.Items)
 	{
 		++index;
-		Console.WriteLine($"{index}: {item.PublishDate} @ ");
 
 		if (item.Links.FirstOrDefault(l => l.RelationshipType == "alternate") is not null and var postLink)
 		{
