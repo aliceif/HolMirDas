@@ -40,7 +40,8 @@ HashSet<Uri> receivedUrls = [];
 
 foreach (var rssUrl in rssUrls)
 {
-	using var rssXmlReader = XmlReader.Create(rssUrl);
+	await using var xmlStream = await rssUrl.GetStreamAsync();
+	using var rssXmlReader = XmlReader.Create(xmlStream);
 	var feed = SyndicationFeed.Load(rssXmlReader);
 	int index = 0;
 	
