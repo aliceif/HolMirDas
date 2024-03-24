@@ -43,7 +43,9 @@ foreach (var rssUrl in rssUrls)
 	using var rssXmlReader = XmlReader.Create(rssUrl);
 	var feed = SyndicationFeed.Load(rssXmlReader);
 	int index = 0;
-	foreach (var item in feed.Items)
+	
+	// rss is customarily sorted reverse-chronological, we want chronological to avoid loss of older entries
+	foreach (var item in feed.Items.Reverse())
 	{
 		++index;
 
