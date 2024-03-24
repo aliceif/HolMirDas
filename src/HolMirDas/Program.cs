@@ -1,5 +1,6 @@
 using System.Net;
 using System.ServiceModel.Syndication;
+using System.Text.Json;
 using System.Xml;
 
 using Flurl;
@@ -7,7 +8,12 @@ using Flurl.Http;
 
 const string ApplicationName = "HolMirDas";
 Guid applicationGuid = Guid.Parse("f61215eb-1c9e-4114-a32c-84a300ef890c");
-string tempFolder = $"{ApplicationName}_{applicationGuid:D}";
+string tempFolderName = $"{ApplicationName}_{applicationGuid:D}";
+string tempFolderPath = Path.Join(Path.GetTempPath(), tempFolderName);
+string processingLogFilePath = Path.Join(Path.GetTempPath(), tempFolderName, "processinglog.json");
+
+const int maxLogEntries = 1000;
+const int maxTries = 48;
 
 Console.WriteLine("Starting HolMirDas");
 
@@ -31,7 +37,7 @@ IEnumerable<string> rssUrls =
 [
 ];
 
-HashSet<Uri> postUrls = [];
+HashSet<Uri> receivedUrls = [];
 
 foreach (var rssUrl in rssUrls)
 {
@@ -45,7 +51,7 @@ foreach (var rssUrl in rssUrls)
 
 		if (item.Links.FirstOrDefault(l => l.RelationshipType == "alternate") is not null and var postLink)
 		{
-			postUrls.Add(postLink.Uri);
+			receivedUrls.Add(postLink.Uri);
 			Console.WriteLine($"{index}: {item.PublishDate} @ {postLink.Uri}");
 		}
 		else
@@ -69,11 +75,42 @@ foreach (var rssUrl in rssUrls)
 // this needs to avoid getting slapped by the rate limit, even apart from prefiltering
 // simple delay time in the cyclical working through the set?
 
-Console.WriteLine($"Total queue size: {postUrls.Count}");
+ICollection<ProcessingLogEntry> processingLog;
+// read processing log
+try
+{
+	await using (var processingLogReadStream = File.OpenRead(processingLogFilePath))
+	{
+		processingLog = (await JsonSerializer.DeserializeAsync<IEnumerable<ProcessingLogEntry>>(processingLogReadStream) ?? []).ToList();
+	}
+}
+catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+{
+	processingLog = [];
+
+	Directory.CreateDirectory(tempFolderPath);
+	await using var createStream = File.Create(processingLogFilePath);
+	await JsonSerializer.SerializeAsync<IEnumerable<ProcessingLogEntry>>(createStream, processingLog);
+}
+
+Console.WriteLine($"Log statistics before processing: New {receivedUrls.Count} ToDo {processingLog.Count(p => p.UrlState == UrlState.Todo)} Retry  {processingLog.Count(p => p.UrlState == UrlState.Retry)}");
+
+var receivedLogEntries = receivedUrls.Select(u => new ProcessingLogEntry(u, UrlState.Todo, 0, DateTimeOffset.Now));
+
+var workLog = processingLog.Concat(receivedLogEntries).ToList();
+var resultLog = new List<ProcessingLogEntry>(workLog.Count);
 
 int successCount = 0;
-foreach (var postUrl in postUrls)
+foreach (var logEntry in workLog)
 {
+	if (logEntry.UrlState is UrlState.Done or UrlState.GiveUp)
+	{
+		resultLog.Add(logEntry);
+		continue;
+	}
+
+	Console.WriteLine("Processing log entry {logEntry}");
+
 	try
 	{
 		var result = await targetInstanceUrl
@@ -82,11 +119,13 @@ foreach (var postUrl in postUrls)
 			.PostJsonAsync(new
 			{
 				i = targetToken,
-				uri = postUrl.ToString(),
+				uri = logEntry.PostUrl.ToString(),
 			})
 			.ReceiveString();
-		var jsonResult = System.Text.Json.JsonDocument.Parse(result);
-		Console.WriteLine($"Result of {postUrl}:{Environment.NewLine}{jsonResult}");
+		var jsonResult = JsonDocument.Parse(result);
+		// Console.WriteLine($"Result of {logEntry.PostUrl}:{Environment.NewLine}{jsonResult}");
+
+		resultLog.Add(logEntry with { UrlState = UrlState.Done });
 
 		await Task.Delay(TimeSpan.FromSeconds(5));
 		++successCount;
@@ -95,16 +134,73 @@ foreach (var postUrl in postUrls)
 	{
 		if (ex.StatusCode == 429)
 		{
-			Console.WriteLine($"Ran into rate limit at element {successCount} / {postUrls.Count}");
+			Console.WriteLine($"Ran into rate limit at element {successCount} / {receivedUrls.Count}");
 			Console.WriteLine(ex.ToString());
+
+			// count ratelimit as no try
+			resultLog.Add(logEntry with { UrlState = UrlState.Todo });
 			break;
 		}
 		else
 		{
 			Console.WriteLine(ex.ToString());
+
+			if (logEntry.Tries < maxTries)
+			{
+				resultLog.Add(logEntry with { UrlState = UrlState.Retry, Tries = logEntry.Tries + 1 });
+			}
+			else
+			{
+				resultLog.Add(logEntry with { UrlState = UrlState.GiveUp, Tries = logEntry.Tries + 1 });
+			}
+
 			continue;
 		}
 	}
 }
 
+Console.WriteLine("Work finished");
+
+resultLog.AddRange(workLog.Where(w => !resultLog.Any(r => r.PostUrl == w.PostUrl)));
+
+Console.WriteLine($"Log statistics after processing: ToDo {resultLog.Count(p => p.UrlState == UrlState.Todo)} Retry {resultLog.Count(p => p.UrlState == UrlState.Retry)}");
+
+// trim result log if needed
+while (resultLog.Count > maxLogEntries)
+{
+	if (resultLog.Find(l => l.UrlState == UrlState.Done) is not null and var doneEntry)
+	{
+		resultLog.Remove(doneEntry);
+		continue;
+	}
+	if (resultLog.Find(l => l.UrlState == UrlState.GiveUp) is not null and var giveUpEntry)
+	{
+		resultLog.Remove(giveUpEntry);
+		continue;
+	}
+	else
+	{
+		resultLog.RemoveAt(0);
+		continue;
+	}
+}
+
+// write result log
+await using (var processingLogWriteStream = File.OpenWrite(processingLogFilePath))
+{
+	await JsonSerializer.SerializeAsync<IEnumerable<ProcessingLogEntry>>(processingLogWriteStream, resultLog);
+}
+
 Console.WriteLine("HolMirDas finished");
+
+
+record class ProcessingLogEntry(Uri PostUrl, UrlState UrlState, int Tries, DateTimeOffset InitialCycleTimestamp);
+
+enum UrlState
+{
+	Todo = 0,
+	Retry = 1,
+	Done = 2,
+	GiveUp = 3,
+
+}
