@@ -60,6 +60,9 @@ foreach (var rssUrl in rssUrls)
 	}
 }
 
+Console.WriteLine($"Incoming RSS Url count: {receivedUrls.Count}");
+var receivedLogEntries = receivedUrls.Select(u => new ProcessingLogEntry(u, UrlState.Todo, 0, DateTimeOffset.Now));
+
 // bonus - can we pre-screen the incoming links against something like a local ringbuffer to prevent repeatedly ap/get-ing the same posts?
 // can redis easily do this? -> add until we use "too much space?"
 
@@ -92,11 +95,9 @@ catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundExcep
 	await JsonSerializer.SerializeAsync<IEnumerable<ProcessingLogEntry>>(createStream, processingLog);
 }
 
-Console.WriteLine($"Log statistics before processing: New {receivedUrls.Count} ToDo {processingLog.Count(p => p.UrlState == UrlState.Todo)} Retry  {processingLog.Count(p => p.UrlState == UrlState.Retry)}");
+var workLog = processingLog.Concat(receivedLogEntries).DistinctBy(l => l.PostUrl).ToList();
+Console.WriteLine($"Log statistics before processing: ToDo {workLog.Count(p => p.UrlState == UrlState.Todo)} (New {workLog.Except(processingLog).Count()}) Retry {workLog.Count(p => p.UrlState == UrlState.Retry)}");
 
-var receivedLogEntries = receivedUrls.Select(u => new ProcessingLogEntry(u, UrlState.Todo, 0, DateTimeOffset.Now));
-
-var workLog = processingLog.Concat(receivedLogEntries).ToList();
 var resultLog = new List<ProcessingLogEntry>(workLog.Count);
 
 int successCount = 0;
@@ -108,7 +109,7 @@ foreach (var logEntry in workLog)
 		continue;
 	}
 
-	Console.WriteLine("Processing log entry {logEntry}");
+	Console.WriteLine($"Processing log entry {logEntry}");
 
 	try
 	{
@@ -133,7 +134,7 @@ foreach (var logEntry in workLog)
 	{
 		if (ex.StatusCode == 429)
 		{
-			Console.WriteLine($"Ran into rate limit at element {successCount} / {receivedUrls.Count}");
+			Console.WriteLine($"Ran into rate limit at element {successCount + 1} / {receivedUrls.Count}");
 			Console.WriteLine(ex.ToString());
 
 			// count ratelimit as no try
