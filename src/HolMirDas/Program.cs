@@ -133,7 +133,7 @@ foreach (var logEntry in workLog)
 	{
 		if (ex.StatusCode == 429)
 		{
-			Console.WriteLine($"Ran into rate limit at element {successCount + 1} / {receivedUrls.Count}");
+			Console.WriteLine($"Ran into rate limit at element {successCount + 1} / {workLog.Count}");
 			Console.WriteLine(ex.ToString());
 
 			// count ratelimit as no try
