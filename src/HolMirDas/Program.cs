@@ -23,7 +23,7 @@ var configuration = new ConfigurationBuilder()
 	.AddEnvironmentVariables()
 	.Build();
 
-var logConfig =configuration.GetSection("Logging"); 
+var logConfig = configuration.GetSection("Logging");
 
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddSystemdConsole().AddConfiguration(logConfig));
 var logger = loggerFactory.CreateLogger<Program>();
@@ -147,7 +147,7 @@ foreach (var logEntry in workLog)
 		}
 		else
 		{
-			logger.LogError($"Error at element {successCount +1} / {workLog.Count}: {ex}");
+			logger.LogError($"Error at element {successCount + 1} / {workLog.Count}: {ex}");
 
 			if (logEntry.Tries < config.MaxRetries)
 			{
