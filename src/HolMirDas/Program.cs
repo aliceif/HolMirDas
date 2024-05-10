@@ -6,45 +6,56 @@ using System.Xml;
 using Flurl;
 using Flurl.Http;
 
+using Microsoft.Extensions.Configuration;
+
 const string ApplicationName = "HolMirDas";
 Guid applicationGuid = Guid.Parse("f61215eb-1c9e-4114-a32c-84a300ef890c");
 string tempFolderName = $"{ApplicationName}_{applicationGuid:D}";
 string tempFolderPath = Path.Join(Path.GetTempPath(), tempFolderName);
 string processingLogFilePath = Path.Join(Path.GetTempPath(), tempFolderName, "processinglog.json");
 
-const int maxLogEntries = 1000;
-const int maxTries = 48;
+string configFilePath = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ApplicationName, $"{ApplicationName}.json");
 
 Console.WriteLine("Starting HolMirDas");
 
-// todo config
+var configuration = new ConfigurationBuilder()
+	.AddJsonFile(configFilePath, optional: true)
+	.AddJsonFile($"{ApplicationName}.json", true)
+	.AddEnvironmentVariables()
+	.Build();
 
-// configs needed:
-// list of urls (with source type)
-// target instance
-// access token
-// size of buffer (some servers have no storage)
-// retry counter
+var config = configuration.Get<Config>();
+if (config is null)
+{
+	Console.WriteLine("Error determining configuration. Please configure this application using HolMirDas.json in the usual path or via Environment.");
+	Environment.Exit(1);
+}
+
+Console.WriteLine("HolMirDas configured");
 
 // todo proper logging
 // we probably want to send this to the journal on gnu/systemd/linux
 
-var targetToken = "";
-var targetInstanceUrl = "";
+if (config.TargetToken is null || config.TargetServerUrl is null)
+{
+	Console.WriteLine("Missing target server configuration.");
+	Environment.Exit(1);
+}
 
-IEnumerable<string> rssUrls =
-[
-];
+if (config.RssUrls.Length == 0)
+{
+	Console.WriteLine("Warning: No feeds configured.");
+}
 
 HashSet<Uri> receivedUrls = [];
 
-foreach (var rssUrl in rssUrls)
+foreach (var rssUrl in config.RssUrls)
 {
 	await using var xmlStream = await rssUrl.GetStreamAsync();
 	using var rssXmlReader = XmlReader.Create(xmlStream);
 	var feed = SyndicationFeed.Load(rssXmlReader);
 	int index = 0;
-	
+
 	// rss is customarily sorted reverse-chronological, we want chronological to avoid loss of older entries
 	foreach (var item in feed.Items.Reverse())
 	{
@@ -101,12 +112,12 @@ foreach (var logEntry in workLog)
 
 	try
 	{
-		var result = await targetInstanceUrl
+		var result = await config.TargetServerUrl
 			.AppendPathSegment("api")
 			.AppendPathSegments("ap", "show")
 			.PostJsonAsync(new
 			{
-				i = targetToken,
+				i = config.TargetToken,
 				uri = logEntry.PostUrl.ToString(),
 			})
 			.ReceiveString();
@@ -133,7 +144,7 @@ foreach (var logEntry in workLog)
 		{
 			Console.WriteLine(ex.ToString());
 
-			if (logEntry.Tries < maxTries)
+			if (logEntry.Tries < config.MaxRetries)
 			{
 				resultLog.Add(logEntry with { UrlState = UrlState.Retry, Tries = logEntry.Tries + 1 });
 			}
@@ -154,7 +165,7 @@ resultLog.AddRange(workLog.Where(w => !resultLog.Any(r => r.PostUrl == w.PostUrl
 Console.WriteLine($"Log statistics after processing: ToDo {resultLog.Count(p => p.UrlState == UrlState.Todo)} Retry {resultLog.Count(p => p.UrlState == UrlState.Retry)}");
 
 // trim result log if needed
-while (resultLog.Count > maxLogEntries)
+while (resultLog.Count > config.MaxLogEntries)
 {
 	if (resultLog.Find(l => l.UrlState == UrlState.Done) is not null and var doneEntry)
 	{
@@ -191,4 +202,13 @@ enum UrlState
 	Done = 2,
 	GiveUp = 3,
 
+}
+
+class Config
+{
+	public string? TargetServerUrl { get; set; }
+	public string? TargetToken { get; set; }
+	public int MaxLogEntries { get; set; } = 1000;
+	public int MaxRetries { get; set; } = 48;
+	public string[] RssUrls { get; set; } = [];
 }
