@@ -7,6 +7,7 @@ using Flurl;
 using Flurl.Http;
 
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 const string ApplicationName = "HolMirDas";
 Guid applicationGuid = Guid.Parse("f61215eb-1c9e-4114-a32c-84a300ef890c");
@@ -16,7 +17,10 @@ string processingLogFilePath = Path.Join(Path.GetTempPath(), tempFolderName, "pr
 
 string configFilePath = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ApplicationName, $"{ApplicationName}.json");
 
-Console.WriteLine("Starting HolMirDas");
+using var loggerFactory = LoggerFactory.Create(builder => builder.AddSystemdConsole());
+var logger = loggerFactory.CreateLogger<Program>();
+
+logger.LogInformation("Starting HolMirDas");
 
 var configuration = new ConfigurationBuilder()
 	.AddJsonFile(configFilePath, optional: true)
@@ -27,24 +31,24 @@ var configuration = new ConfigurationBuilder()
 var config = configuration.Get<Config>();
 if (config is null)
 {
-	Console.WriteLine("Error determining configuration. Please configure this application using HolMirDas.json in the usual path or via Environment.");
+	logger.LogError("Error determining configuration. Please configure this application using HolMirDas.json in the usual path or via Environment.");
 	Environment.Exit(1);
 }
 
-Console.WriteLine("HolMirDas configured");
+logger.LogInformation("HolMirDas configured");
 
 // todo proper logging
 // we probably want to send this to the journal on gnu/systemd/linux
 
 if (config.TargetToken is null || config.TargetServerUrl is null)
 {
-	Console.WriteLine("Missing target server configuration.");
+	logger.LogError("Missing target server configuration.");
 	Environment.Exit(1);
 }
 
 if (config.RssUrls.Length == 0)
 {
-	Console.WriteLine("Warning: No feeds configured.");
+	logger.LogWarning("No feeds configured.");
 }
 
 HashSet<Uri> receivedUrls = [];
@@ -64,16 +68,16 @@ foreach (var rssUrl in config.RssUrls)
 		if (item.Links.FirstOrDefault(l => l.RelationshipType == "alternate") is not null and var postLink)
 		{
 			receivedUrls.Add(postLink.Uri);
-			Console.WriteLine($"{index}: {item.PublishDate} @ {postLink.Uri}");
+			logger.LogInformation($"{index}: {item.PublishDate} @ {postLink.Uri}");
 		}
 		else
 		{
-			Console.WriteLine($"{index}: {item.PublishDate} @ no link?");
+			logger.LogWarning($"{index}: {item.PublishDate} @ no link?");
 		}
 	}
 }
 
-Console.WriteLine($"Incoming RSS Url count: {receivedUrls.Count}");
+logger.LogInformation($"Incoming RSS Url count: {receivedUrls.Count}");
 var receivedLogEntries = receivedUrls.Select(u => new ProcessingLogEntry(u, UrlState.Todo, 0, DateTimeOffset.Now));
 
 ICollection<ProcessingLogEntry> processingLog;
@@ -95,7 +99,7 @@ catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundExcep
 }
 
 var workLog = processingLog.Concat(receivedLogEntries).DistinctBy(l => l.PostUrl).ToList();
-Console.WriteLine($"Log statistics before processing: ToDo {workLog.Count(p => p.UrlState == UrlState.Todo)} (New {workLog.Except(processingLog).Count()}) Retry {workLog.Count(p => p.UrlState == UrlState.Retry)}");
+logger.LogInformation($"Log statistics before processing: ToDo {workLog.Count(p => p.UrlState == UrlState.Todo)} (New {workLog.Except(processingLog).Count()}) Retry {workLog.Count(p => p.UrlState == UrlState.Retry)}");
 
 var resultLog = new List<ProcessingLogEntry>(workLog.Count);
 
@@ -108,7 +112,7 @@ foreach (var logEntry in workLog)
 		continue;
 	}
 
-	Console.WriteLine($"Processing log entry {logEntry}");
+	logger.LogDebug($"Processing log entry {logEntry}");
 
 	try
 	{
@@ -122,7 +126,7 @@ foreach (var logEntry in workLog)
 			})
 			.ReceiveString();
 		var jsonResult = JsonDocument.Parse(result);
-		// Console.WriteLine($"Result of {logEntry.PostUrl}:{Environment.NewLine}{jsonResult}");
+		logger.LogDebug($"Result of {logEntry.PostUrl}:{Environment.NewLine}{jsonResult}");
 
 		resultLog.Add(logEntry with { UrlState = UrlState.Done });
 
@@ -133,8 +137,7 @@ foreach (var logEntry in workLog)
 	{
 		if (ex.StatusCode == 429)
 		{
-			Console.WriteLine($"Ran into rate limit at element {successCount + 1} / {workLog.Count}");
-			Console.WriteLine(ex.ToString());
+			logger.LogWarning($"Ran into rate limit at element {successCount + 1} / {workLog.Count}: {ex}");
 
 			// count ratelimit as no try
 			resultLog.Add(logEntry with { UrlState = UrlState.Todo });
@@ -142,7 +145,7 @@ foreach (var logEntry in workLog)
 		}
 		else
 		{
-			Console.WriteLine(ex.ToString());
+			logger.LogError($"Error at element {successCount +1} / {workLog.Count}: {ex}");
 
 			if (logEntry.Tries < config.MaxRetries)
 			{
@@ -158,11 +161,11 @@ foreach (var logEntry in workLog)
 	}
 }
 
-Console.WriteLine("Work finished");
+logger.LogInformation("Work finished");
 
 resultLog.AddRange(workLog.Where(w => !resultLog.Any(r => r.PostUrl == w.PostUrl)));
 
-Console.WriteLine($"Log statistics after processing: ToDo {resultLog.Count(p => p.UrlState == UrlState.Todo)} Retry {resultLog.Count(p => p.UrlState == UrlState.Retry)}");
+logger.LogInformation($"Log statistics after processing: ToDo {resultLog.Count(p => p.UrlState == UrlState.Todo)} Retry {resultLog.Count(p => p.UrlState == UrlState.Retry)}");
 
 // trim result log if needed
 while (resultLog.Count > config.MaxLogEntries)
@@ -190,7 +193,7 @@ await using (var processingLogWriteStream = File.OpenWrite(processingLogFilePath
 	await JsonSerializer.SerializeAsync<IEnumerable<ProcessingLogEntry>>(processingLogWriteStream, resultLog);
 }
 
-Console.WriteLine("HolMirDas finished");
+logger.LogInformation("HolMirDas finished");
 
 
 record class ProcessingLogEntry(Uri PostUrl, UrlState UrlState, int Tries, DateTimeOffset InitialCycleTimestamp);
