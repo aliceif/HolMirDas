@@ -8,6 +8,7 @@ using Flurl.Http;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Configuration;
 
 const string ApplicationName = "HolMirDas";
 Guid applicationGuid = Guid.Parse("f61215eb-1c9e-4114-a32c-84a300ef890c");
@@ -17,18 +18,20 @@ string processingLogFilePath = Path.Join(Path.GetTempPath(), tempFolderName, "pr
 
 string configFilePath = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ApplicationName, $"{ApplicationName}.json");
 
-using var loggerFactory = LoggerFactory.Create(builder => builder.AddSystemdConsole());
-var logger = loggerFactory.CreateLogger<Program>();
-
-logger.LogInformation("Starting HolMirDas");
-
 var configuration = new ConfigurationBuilder()
 	.AddJsonFile(configFilePath, optional: true)
 	.AddJsonFile($"{ApplicationName}.json", true)
 	.AddEnvironmentVariables()
 	.Build();
 
-var config = configuration.Get<Config>();
+var logConfig =configuration.GetSection("Logging"); 
+
+using var loggerFactory = LoggerFactory.Create(builder => builder.AddSystemdConsole().AddConfiguration(logConfig));
+var logger = loggerFactory.CreateLogger<Program>();
+
+logger.LogInformation("Starting HolMirDas");
+
+var config = configuration.GetSection("Config").Get<Config>();
 if (config is null)
 {
 	logger.LogError("Error determining configuration. Please configure this application using HolMirDas.json in the usual path or via Environment.");
