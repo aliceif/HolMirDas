@@ -1,4 +1,4 @@
-using System.ServiceModel.Syndication;
+﻿using System.ServiceModel.Syndication;
 using System.Text.Json;
 using System.Xml;
 
@@ -28,7 +28,7 @@ var logConfig = configuration.GetSection("Logging");
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddSystemdConsole().AddConfiguration(logConfig));
 var logger = loggerFactory.CreateLogger<Program>();
 
-logger.LogInformation($"Starting HolMirDas, version {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}");
+logger.LogInformation("Starting HolMirDas, version {Version}", System.Reflection.Assembly.GetExecutingAssembly().GetName().Version);
 
 var config = configuration.GetSection("Config").Get<Config>();
 if (config is null)
@@ -70,16 +70,16 @@ foreach (var rssUrl in config.RssUrls)
 		if (item.Links.FirstOrDefault(l => l.RelationshipType == "alternate") is not null and var postLink)
 		{
 			receivedUrls.Add(postLink.Uri);
-			logger.LogInformation($"{index}: {item.PublishDate} @ {postLink.Uri}");
+			logger.LogDebug("{Index}: {PublishDate} @ {Uri}", index, item.PublishDate, postLink.Uri);
 		}
 		else
 		{
-			logger.LogWarning($"{index}: {item.PublishDate} @ no link?");
+			logger.LogWarning("{Index}: {item.PublishDate} @ no link?", index, item.PublishDate);
 		}
 	}
 }
 
-logger.LogInformation($"Incoming RSS Url count: {receivedUrls.Count}");
+logger.LogInformation("Incoming RSS Url count: {Count}", receivedUrls.Count);
 var receivedLogEntries = receivedUrls.Select(u => new ProcessingLogEntry(u, UrlState.Todo, 0, DateTimeOffset.Now));
 
 ICollection<ProcessingLogEntry> processingLog;
@@ -101,7 +101,7 @@ catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundExcep
 }
 
 var workLog = processingLog.Concat(receivedLogEntries).DistinctBy(l => l.PostUrl).ToList();
-logger.LogInformation($"Log statistics before processing: ToDo {workLog.Count(p => p.UrlState == UrlState.Todo)} (New {workLog.Except(processingLog).Count()}) Retry {workLog.Count(p => p.UrlState == UrlState.Retry)}");
+logger.LogInformation("Log statistics before processing: ToDo {ToDo} (New {New}) Retry {Retry}", workLog.Count(p => p.UrlState == UrlState.Todo), workLog.Except(processingLog).Count(), workLog.Count(p => p.UrlState == UrlState.Retry));
 
 var resultLog = new List<ProcessingLogEntry>(workLog.Count);
 
@@ -114,7 +114,7 @@ foreach (var logEntry in workLog)
 		continue;
 	}
 
-	logger.LogDebug($"Processing log entry {logEntry}");
+	logger.LogDebug("Processing log entry {LogEntry}", logEntry);
 
 	try
 	{
@@ -128,7 +128,7 @@ foreach (var logEntry in workLog)
 			})
 			.ReceiveString();
 		var jsonResult = JsonDocument.Parse(result);
-		logger.LogDebug($"Result of {logEntry.PostUrl}:{Environment.NewLine}{jsonResult}");
+		logger.LogTrace("Result of {PostUrl}: {JsonResult}", logEntry.PostUrl, jsonResult);
 
 		resultLog.Add(logEntry with { UrlState = UrlState.Done });
 
@@ -139,7 +139,7 @@ foreach (var logEntry in workLog)
 	{
 		if (ex.StatusCode == 429)
 		{
-			logger.LogWarning($"Ran into rate limit at element {successCount + 1} / {workLog.Count}: {ex}");
+			logger.LogWarning("Ran into rate limit at element {Index} / {WorkLogCount}: {Exception}", successCount + 1, workLog.Count, ex);
 
 			// count ratelimit as no try
 			resultLog.Add(logEntry with { UrlState = UrlState.Todo });
@@ -147,7 +147,7 @@ foreach (var logEntry in workLog)
 		}
 		else
 		{
-			logger.LogError($"Error at element {successCount + 1} / {workLog.Count}: {ex}");
+			logger.LogError("Error at element {Index} / {WorkLogCount}: {Exception}", successCount + 1, workLog.Count, ex);
 
 			if (logEntry.Tries < config.MaxRetries)
 			{
@@ -167,7 +167,7 @@ logger.LogInformation("Work finished");
 
 resultLog.AddRange(workLog.Where(w => !resultLog.Any(r => r.PostUrl == w.PostUrl)));
 
-logger.LogInformation($"Log statistics after processing: ToDo {resultLog.Count(p => p.UrlState == UrlState.Todo)} Retry {resultLog.Count(p => p.UrlState == UrlState.Retry)}");
+logger.LogInformation("Log statistics after processing: ToDo {ToDo} Retry {Retry}", resultLog.Count(p => p.UrlState == UrlState.Todo),resultLog.Count(p => p.UrlState == UrlState.Retry));
 
 // trim result log if needed
 while (resultLog.Count > config.MaxLogEntries)
