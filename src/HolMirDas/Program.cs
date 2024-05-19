@@ -28,7 +28,7 @@ var logConfig = configuration.GetSection("Logging");
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddSystemdConsole().AddConfiguration(logConfig));
 var logger = loggerFactory.CreateLogger<Program>();
 
-logger.LogInformation("Starting HolMirDas");
+logger.LogInformation($"Starting HolMirDas, version {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}");
 
 var config = configuration.GetSection("Config").Get<Config>();
 if (config is null)
