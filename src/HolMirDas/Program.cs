@@ -99,6 +99,12 @@ catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundExcep
 	await using var createStream = File.Create(processingLogFilePath);
 	await JsonSerializer.SerializeAsync<IEnumerable<ProcessingLogEntry>>(createStream, processingLog);
 }
+catch (JsonException ex)
+{
+	logger.LogCritical("The processing log in {ProcessingLogFilePath} seems to be corrupted. Exiting now! {Exception}", processingLogFilePath, ex);
+	Environment.Exit(1);
+	return;
+}
 
 var workLog = processingLog.Concat(receivedLogEntries).DistinctBy(l => l.PostUrl).ToList();
 logger.LogInformation("Log statistics before processing: ToDo {ToDo} (New {New}) Retry {Retry}", workLog.Count(p => p.UrlState == UrlState.Todo), workLog.Except(processingLog).Count(), workLog.Count(p => p.UrlState == UrlState.Retry));
