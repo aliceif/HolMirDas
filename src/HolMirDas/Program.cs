@@ -153,7 +153,7 @@ foreach (var logEntry in workLog)
 		}
 		else
 		{
-			logger.LogError("Error at element {Index} / {WorkLogCount}: {Exception}", successCount + 1, workLog.Count, ex);
+			logger.LogError("Error at element {Index} / {WorkLogCount} ({PostUrl}): {Exception}", successCount + 1, workLog.Count, logEntry.PostUrl, ex);
 
 			if (logEntry.Tries < config.MaxRetries)
 			{
@@ -173,7 +173,7 @@ logger.LogInformation("Work finished");
 
 resultLog.AddRange(workLog.Where(w => !resultLog.Any(r => r.PostUrl == w.PostUrl)));
 
-logger.LogInformation("Log statistics after processing: ToDo {ToDo} Retry {Retry}", resultLog.Count(p => p.UrlState == UrlState.Todo),resultLog.Count(p => p.UrlState == UrlState.Retry));
+logger.LogInformation("Log statistics after processing: ToDo {ToDo} Retry {Retry}", resultLog.Count(p => p.UrlState == UrlState.Todo), resultLog.Count(p => p.UrlState == UrlState.Retry));
 
 // trim result log if needed
 while (resultLog.Count > config.MaxLogEntries)
