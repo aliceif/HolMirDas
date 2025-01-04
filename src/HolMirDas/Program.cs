@@ -196,7 +196,7 @@ while (resultLog.Count > config.MaxLogEntries)
 }
 
 // write result log
-await using (var processingLogWriteStream = File.OpenWrite(processingLogFilePath))
+await using (var processingLogWriteStream = File.Create(processingLogFilePath))
 {
 	await JsonSerializer.SerializeAsync<IEnumerable<ProcessingLogEntry>>(processingLogWriteStream, resultLog);
 }
