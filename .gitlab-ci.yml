@@ -17,7 +17,6 @@ publish-windows:
   rules:
       - if: $CI_COMMIT_TAG == null
   stage: publish
-  environment: production
   script:
     - dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o ./publish-windows $PROJECT_PATH
   artifacts:
@@ -32,7 +31,6 @@ publish-linux:
   rules:
       - if: $CI_COMMIT_TAG == null
   stage: publish
-  environment: production
   script:
     - dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true -o ./publish-linux $PROJECT_PATH
   artifacts:
@@ -47,7 +45,6 @@ publish-windows-release:
   rules:
       - if: $CI_COMMIT_TAG != null
   stage: publish
-  environment: production
   script:
     - dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o ./publish-windows $PROJECT_PATH
   artifacts:
@@ -64,7 +61,6 @@ publish-linux-release:
   rules:
       - if: $CI_COMMIT_TAG != null
   stage: publish
-  environment: production
   script:
     - dotnet restore $PROJECT_PATH
     - dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true -o ./publish-linux --no-restore $PROJECT_PATH
