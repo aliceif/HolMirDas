@@ -34,7 +34,7 @@ var config = configuration.GetSection("Config").Get<Config>();
 if (config is null)
 {
 	logger.LogError("Error determining configuration. Please configure this application using HolMirDas.json in the usual path or via Environment.");
-	Environment.Exit(1);
+	return 1;
 }
 
 logger.LogInformation("HolMirDas configured");
@@ -102,8 +102,7 @@ catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundExcep
 catch (JsonException ex)
 {
 	logger.LogCritical("The processing log in {ProcessingLogFilePath} seems to be corrupted. Exiting now! {Exception}", processingLogFilePath, ex);
-	Environment.Exit(1);
-	return;
+	return 1;
 }
 
 var workLog = processingLog.Concat(receivedLogEntries).DistinctBy(l => l.PostUrl).ToList();
@@ -202,6 +201,8 @@ await using (var processingLogWriteStream = File.Create(processingLogFilePath))
 }
 
 logger.LogInformation("HolMirDas finished");
+
+return 0;
 
 
 record class ProcessingLogEntry(Uri PostUrl, UrlState UrlState, int Tries, DateTimeOffset InitialCycleTimestamp);
