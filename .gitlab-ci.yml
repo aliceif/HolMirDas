@@ -15,6 +15,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - dotnet build  --no-restore $PROJECT_PATH
   tags:
     - net8
+    - build
 
 publish-windows:
   stage: publish
@@ -27,6 +28,7 @@ publish-windows:
       - $CI_PROJECT_DIR/publish-windows
   tags:
     - net8
+    - build
 
 publish-linux:
   stage: publish
@@ -39,6 +41,7 @@ publish-linux:
       - $CI_PROJECT_DIR/publish-linux
   tags:
     - net8
+    - build
 
 upload-to-registry:
   stage: upload
@@ -58,6 +61,7 @@ upload-to-registry:
     - publish-linux
   tags:
     - net8
+    - build
 
 release-job:
   stage: release
@@ -83,3 +87,4 @@ release-job:
     - upload-to-registry
   tags:
     - net8
+    - build
