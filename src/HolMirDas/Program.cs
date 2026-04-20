@@ -57,25 +57,32 @@ HashSet<Uri> receivedUrls = [];
 
 foreach (var rssUrl in config.RssUrls)
 {
-	await using var xmlStream = await rssUrl.GetStreamAsync();
-	using var rssXmlReader = XmlReader.Create(xmlStream);
-	var feed = SyndicationFeed.Load(rssXmlReader);
-	int index = 0;
-
-	// rss is customarily sorted reverse-chronological, we want chronological to avoid loss of older entries
-	foreach (var item in feed.Items.Reverse())
+	try
 	{
-		++index;
+		await using var xmlStream = await rssUrl.GetStreamAsync();
+		using var rssXmlReader = XmlReader.Create(xmlStream);
+		var feed = SyndicationFeed.Load(rssXmlReader);
+		int index = 0;
 
-		if (item.Links.FirstOrDefault(l => l.RelationshipType == "alternate") is not null and var postLink)
+		// rss is customarily sorted reverse-chronological, we want chronological to avoid loss of older entries
+		foreach (var item in feed.Items.Reverse())
 		{
-			receivedUrls.Add(postLink.Uri);
-			logger.LogDebug("{Index}: {PublishDate} @ {Uri}", index, item.PublishDate, postLink.Uri);
+			++index;
+
+			if (item.Links.FirstOrDefault(l => l.RelationshipType == "alternate") is not null and var postLink)
+			{
+				receivedUrls.Add(postLink.Uri);
+				logger.LogDebug("{Index}: {PublishDate} @ {Uri}", index, item.PublishDate, postLink.Uri);
+			}
+			else
+			{
+				logger.LogWarning("{Index}: {PublishDate} @ no link?", index, item.PublishDate);
+			}
 		}
-		else
-		{
-			logger.LogWarning("{Index}: {item.PublishDate} @ no link?", index, item.PublishDate);
-		}
+	}
+	catch (Exception ex)
+	{
+		logger.LogError(ex, "Fetching the rss feed {URL} failed: {Exception}", rssUrl, ex);
 	}
 }
 
