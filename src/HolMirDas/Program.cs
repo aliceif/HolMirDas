@@ -117,9 +117,11 @@ logger.LogInformation("Log statistics before processing: ToDo {ToDo} (New {New})
 
 var resultLog = new List<ProcessingLogEntry>(workLog.Count);
 
+int workCount = 0;
 int successCount = 0;
 foreach (var logEntry in workLog)
 {
+	++workCount;
 	if (logEntry.UrlState is UrlState.Done or UrlState.GiveUp)
 	{
 		resultLog.Add(logEntry);
@@ -159,7 +161,7 @@ foreach (var logEntry in workLog)
 		}
 		else
 		{
-			logger.LogError("Error at element {Index} / {WorkLogCount} ({PostUrl}): {Exception}", successCount + 1, workLog.Count, logEntry.PostUrl, ex);
+			logger.LogError("Error at element {Index} / {WorkLogCount} ({PostUrl}): {Exception}", workCount, workLog.Count, logEntry.PostUrl, ex);
 
 			if (logEntry.Tries < config.MaxRetries)
 			{
