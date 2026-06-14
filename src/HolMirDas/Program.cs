@@ -153,7 +153,7 @@ foreach (var logEntry in workLog)
 	{
 		if (ex.StatusCode == 429)
 		{
-			logger.LogWarning("Ran into rate limit at element {Index} / {WorkLogCount}: {Exception}", successCount + 1, workLog.Count, ex);
+			logger.LogWarning("Ran into rate limit at element {Index} / {WorkLogCount} ({SubmittedItems} submitted): {Exception}", workCount, workLog.Count, successCount + 1, ex);
 
 			// count ratelimit as no try
 			resultLog.Add(logEntry with { UrlState = UrlState.Todo });
